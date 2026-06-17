@@ -1,0 +1,9 @@
+torch
+torchvision
+torchaudio
+git+https://github.com/luca-medeiros/lang-segment-anything.git
+pillow
+matplotlib
+numpy
+opencv-python
+transformers
