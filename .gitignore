@@ -84,3 +84,5 @@ npm-debug.log
 ._*
 .Spotlight-V100
 .Trashes
+
+nohup.out

@@ -23,7 +23,7 @@ warnings.filterwarnings("ignore")
 CONFIG = {
     "IMAGE_DIR": Path("/home/rishabh.mondal/mbzuai/cbm data/power_plants/images_y_2026_z_18_4096_still_factory/crops/"),
     "JSON_DIR": Path("/home/rishabh.mondal/mbzuai/cbm data/power_plants/images_y_2026_z_18_4096_still_factory/crops_pseudo_label/"),
-    "OUTPUT_DIR": Path("./data/crops/segmentation_outputs/"),
+    "OUTPUT_DIR": Path("./data/crops/segmentation_outputs_v2_structural/"),
     "DEVICE": "cuda" if torch.cuda.is_available() else "cpu",
     
     # DIRECTORY TARGETING CONTROLS
@@ -37,17 +37,39 @@ CONFIG = {
     "MAX_INSTANCES_PER_CLASS": 3        # ONLY keep the Top 3 best boxes per concept
 }
 
-# STRATEGY D: Macro to Micro Translation Dictionary
+# STRATEGY D: Macro to Micro Translation Dictionary (Morphological Prompting)
+# Grouping functional JSON labels into purely structural, geometric buckets.
 CONCEPT_TRANSLATION = {
-    "Railway Siding": "steel train tracks",
-    "Switchyard": "electrical transformers and grid infrastructure",
-    "Industrial Building": "large metal roof",
-    "Cooling Tower": "large concrete cooling tower",
-    "Coal Stockpile": "pile of black coal",
-    "Water Body": "water body pond lake",
-    "Chimney Stack": "tall industrial chimney smokestack",
-    "Kiln Chimney": "brick kiln chimney smokestack",
-    "Cement Plant Chimney": "tall cement plant chimney smokestack"
+    # --- BUCKET 1: Long, thin, linear structures ---
+    "Railway Siding": "long straight steel train tracks",
+    "Quarry Conveyor": "long straight elevated conveyor belt",
+    
+    # --- BUCKET 2: Large rectangular roofs ---
+    "Industrial Building": "large flat rectangular building roof",
+    "Boiler Building": "large flat rectangular building roof",
+    "Rotary Kiln Building": "large flat rectangular building roof",
+    
+    # --- BUCKET 3: Solid circular geometric shapes (Top-Down) ---
+    "Storage Tank": "bright white circular storage tank",
+    "Cement Silo": "bright white circular storage tank",
+    
+    # --- BUCKET 4: Tall structures casting long shadows ---
+    "Chimney Stack": "tall circular smokestack casting long shadow",
+    "Kiln Chimney": "tall circular smokestack casting long shadow",
+    "Cement Plant Chimney": "tall circular smokestack casting long shadow",
+    
+    # --- BUCKET 5: Massive hollow circular concrete ---
+    "Cooling Tower": "massive hollow circular concrete cooling tower",
+    
+    # --- BUCKET 6: Dense textured grids ---
+    "Switchyard": "dense grid of electrical transformers",
+    
+    # --- BUCKET 7: Dark amorphous pools ---
+    "Water Body": "dark irregular water pond",
+    "Wastewater Pond": "dark irregular water pond",
+    
+    # --- BUCKET 8: Textured piles ---
+    "Coal Stockpile": "large pile of black coal"
 }
 
 # --- LOGGING SETUP ---
@@ -86,8 +108,9 @@ def parse_present_concepts(json_path: Path) -> List[str]:
 
 def run_owlv2(detector, image_pil: Image.Image, concepts: List[str]) -> Tuple[List[List[float]], List[str]]:
     """Runs OWLv2 with Translation, Area Filtering, and NMS Deduplication."""
+    # 1. Translate concepts to visual prompts
     visual_prompts = [CONCEPT_TRANSLATION.get(c, c) for c in concepts]
-    reverse_map = {CONCEPT_TRANSLATION.get(c, c): c for c in concepts} 
+    reverse_map = {CONCEPT_TRANSLATION.get(c, c): c for c in concepts} # To restore original JSON labels
     
     owl_results = detector(image_pil, candidate_labels=visual_prompts, threshold=CONFIG["OWL_CONFIDENCE_THRESHOLD"])
     
@@ -99,6 +122,7 @@ def run_owlv2(detector, image_pil: Image.Image, concepts: List[str]) -> Tuple[Li
         xmin, ymin, xmax, ymax = res["box"]["xmin"], res["box"]["ymin"], res["box"]["xmax"], res["box"]["ymax"]
         box_area = (xmax - xmin) * (ymax - ymin)
         
+        # STRATEGY A: Area Threshold Filter (Kill massive bleeding boxes)
         if box_area / img_area > CONFIG["MAX_BOX_AREA_RATIO"]:
             continue
             
@@ -109,10 +133,12 @@ def run_owlv2(detector, image_pil: Image.Image, concepts: List[str]) -> Tuple[Li
     if not raw_boxes:
         return [], []
         
+    # STRATEGY C: Deduplication (Non-Maximum Suppression)
     final_boxes, final_labels = [], []
     unique_labels = set(raw_labels)
     
     for label in unique_labels:
+        # Isolate boxes and scores for this specific class
         idxs = [i for i, l in enumerate(raw_labels) if l == label]
         class_boxes = torch.tensor([raw_boxes[i] for i in idxs], dtype=torch.float32)
         class_scores = torch.tensor([raw_scores[i] for i in idxs], dtype=torch.float32)
@@ -190,7 +216,6 @@ def export_results(base_name, folder_name, image_pil, input_boxes, labels, masks
     mask_path = CONFIG["OUTPUT_DIR"] / "binary_masks" / folder_name / f"mask_{base_name}.png"
     cv2.imwrite(str(mask_path), combined_binary_mask)
 
-
 def process_single_image(json_path: Path, folder_name: str, detector, sam_model, sam_processor) -> bool:
     base_name = json_path.stem
     img_path = CONFIG["IMAGE_DIR"] / folder_name / f"{base_name}.png"
@@ -219,6 +244,7 @@ def main():
         
     json_folders = sorted([d for d in CONFIG["JSON_DIR"].iterdir() if d.is_dir()])
     
+    # DIRECTORY TARGETING LOGIC
     if CONFIG.get("TARGET_FOLDERS"):
         target_set = set(CONFIG["TARGET_FOLDERS"])
         json_folders = [d for d in json_folders if d.name in target_set]
