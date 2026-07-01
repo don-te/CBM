@@ -1,9 +1,21 @@
+#Core ML & Vision
+
 torch
 torchvision
 torchaudio
-git+https://github.com/luca-medeiros/lang-segment-anything.git
+
+#Hugging Face (Must be >=4.42.0 to avoid the OWLv2/GroundingDINO tensor bug)
+
+transformers>=4.42.0
+
+#Image Processing & Plotting
+
 pillow
 matplotlib
-numpy
 opencv-python
-transformers
+
+#Data Handling & Mapping
+
+pandas
+folium
+branca

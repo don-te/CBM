@@ -43,9 +43,44 @@ MANIFEST
 *.log
 
 # Data (generated files)
-data/cbm_batch_results/*.csv
-data/cbm_batch_results/visualizations/
+data/cbm_batch_results/
+data/crops/segmentation_outputs/
+*.csv
+*.html
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
 
 # Environment variables
 .env
 .env.local
+.env.*.local
+
+# OS files
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# Temporary/backup files
+*.tmp
+*.bak
+*.backup
+.DS_Store.bak
+
+# Node modules (if used)
+node_modules/
+npm-debug.log
+
+# MacOS
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
