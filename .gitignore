@@ -44,7 +44,7 @@ MANIFEST
 
 # Data (generated files)
 data/cbm_batch_results/
-data/crops/segmentation_outputs/
+data/crops/
 *.csv
 *.html
 
